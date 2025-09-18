@@ -12,8 +12,6 @@ if ($conn->connect_error) {
 
 $id = intval($_POST['id']);
 $user_id = $_SESSION['user_id'];
-
-// Delete only if it belongs to the logged-in user
 $conn->query("DELETE FROM weather_logs WHERE id=$id AND 
 user_id=$user_id");
 

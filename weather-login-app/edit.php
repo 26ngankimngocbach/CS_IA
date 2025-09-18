@@ -1,5 +1,8 @@
 <?php
+// edit.php - Edit weather data entry
 session_start();
+
+// Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
@@ -8,6 +11,48 @@ if (!isset($_SESSION['user_id'])) {
 // Initialize variables
 $date = $location = $temperature = $humidity = $wind_speed = $precipitation = $pressure = "";
 $dateErr = $locationErr = $temperatureErr = $humidityErr = $wind_speedErr = $precipitationErr = $pressureErr = "";
+$success_message = "";
+
+// Get the record ID from URL parameter
+$record_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+
+if ($record_id <= 0) {
+    header("Location: view.php");
+    exit;
+}
+
+// Connect to database and fetch the record
+$conn = new mysqli("localhost", "root", "", "weatherdb");
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+
+$user_id = $_SESSION['user_id'];
+
+// Fetch the record to edit
+$stmt = $conn->prepare("SELECT id, date, location, temperature, humidity, wind_speed, precipitation, pressure FROM weather_logs WHERE id = ? AND user_id = ?");
+$stmt->bind_param("ii", $record_id, $user_id);
+$stmt->execute();
+$result = $stmt->get_result();
+
+if ($result->num_rows === 0) {
+    $stmt->close();
+    $conn->close();
+    header("Location: view.php");
+    exit;
+}
+
+$record = $result->fetch_assoc();
+$stmt->close();
+
+// Populate form fields with existing data
+$date = $record['date'];
+$location = $record['location'];
+$temperature = $record['temperature'];
+$humidity = $record['humidity'];
+$wind_speed = $record['wind_speed'];
+$precipitation = $record['precipitation'];
+$pressure = $record['pressure'];
 
 // If form is submitted, process data
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -75,30 +120,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
     }
     
-    // If no validation errors, save to database
+    // If no validation errors, update the database
     if (empty($dateErr) && empty($locationErr) && empty($temperatureErr) && 
         empty($humidityErr) && empty($wind_speedErr) && empty($precipitationErr) && empty($pressureErr)) {
         
-        $conn = new mysqli("localhost", "root", "", "weatherdb");
-        if ($conn->connect_error) {
-            die("Connection failed: " . $conn->connect_error);
-        }
-        
-        $user_id = $_SESSION['user_id'];
-        $stmt = $conn->prepare("INSERT INTO weather_logs (user_id, date, location, temperature, humidity, wind_speed, precipitation, pressure) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("issddddd", $user_id, $date, $location, $temperature, $humidity, $wind_speed, $precipitation, $pressure);
+        $stmt = $conn->prepare("UPDATE weather_logs SET date = ?, location = ?, temperature = ?, humidity = ?, wind_speed = ?, precipitation = ?, pressure = ? WHERE id = ? AND user_id = ?");
+        $stmt->bind_param("ssdddddi", $date, $location, $temperature, $humidity, $wind_speed, $precipitation, $pressure, $record_id, $user_id);
         
         if ($stmt->execute()) {
-            header("Location: view.php?success=1");
+            $success_message = "Weather data updated successfully!";
+            // Redirect to view page after successful update
+            header("Location: view.php?updated=1");
             exit;
         } else {
             echo "Error: " . $stmt->error;
         }
         
         $stmt->close();
-        $conn->close();
     }
 }
+
+$conn->close();
 
 function test_input($data) {
     $data = trim($data);
@@ -112,21 +154,28 @@ function test_input($data) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MeteoTrack</title>
+  <title>Edit Weather Data - MeteoTrack</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
     <!-- Header Section -->
     <div class="header">
-      <h1>MeteoTrack</h1>
-      <p class="subtitle">Track and monitor weather conditions</p>
+      <h1>Edit Weather Data</h1>
+      <p class="subtitle">Modify your weather log entry</p>
     </div>
+
+    <!-- Success Message -->
+    <?php if (!empty($success_message)): ?>
+      <div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #c3e6cb;">
+        <?php echo $success_message; ?>
+      </div>
+    <?php endif; ?>
 
     <!-- Data Entry Section -->
     <div class="panel">
-      <h2 style="margin-top: 0; color: #0277bd; text-align: center;">Add Weather Data</h2>
-      <form id="weatherForm" method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>">
+      <h2 style="margin-top: 0; color: #0277bd; text-align: center;">Edit Weather Data</h2>
+      <form id="weatherForm" method="POST" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"] . "?id=" . $record_id); ?>">
         <div class="grid">
           <div class="field">
             <label>Date</label>
@@ -165,7 +214,8 @@ function test_input($data) {
           </div>
         </div>
         <div class="actions">
-          <button type="submit" class="button primary">Save Weather Data</button>
+          <button type="submit" class="button primary">Update Weather Data</button>
+          <a href="view.php" class="button">Cancel</a>
         </div>
       </form>
     </div>
@@ -173,11 +223,11 @@ function test_input($data) {
     <!-- Navigation Section -->
     <div class="panel">
       <div class="actions">
-        <a href="view.php" class="button primary">View Saved Data</a>
+        <a href="view.php" class="button primary">Back to View Data</a>
+        <a href="index.php" class="button">Add New Entry</a>
         <a href="logout.php" class="button">Logout</a>
       </div>
     </div>
   </div>
 </body>
 </html>
-
